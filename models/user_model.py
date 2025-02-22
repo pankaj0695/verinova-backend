@@ -9,7 +9,7 @@ def create_user(user_data):
 
 def find_user_by_mobile(mobile_no):
     """Finds a user by their mobile number."""
-    return users_collection.find_one({"mobile_no": mobile_no}, {"_id": 0})  # Exclude MongoDB _id
+    return users_collection.find_one({"mobile": mobile_no}, {"_id": 0})  # Exclude MongoDB _id
 
 def find_user_by_aadhar(aadhar_number):
     """Finds a user by their Aadhar number."""

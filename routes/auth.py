@@ -10,7 +10,7 @@ def signup():
     data = request.get_json()
 
     # Required fields
-    required_fields = ["mobile","name", "address", "dob", "aadhar_url", "pan_url", "selfie_url", "mpin", "fingerprint"]
+    required_fields = ["mobile","name", "address", "dob", "aadharUrl", "panUrl", "selfieUrl", "mpin", "fingerprint"]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
@@ -23,7 +23,7 @@ def signup():
 
     # Store user data
     create_user(data)
-    return jsonify({"message": "User registered successfully"}), 201
+    return jsonify({"message": "User registered successfully"}), 200
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
