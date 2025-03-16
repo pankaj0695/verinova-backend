@@ -33,3 +33,6 @@ s3_client = boto3.client(
 
 # Fast2SMS for SMS OTP
 FAST2SMS_API_KEY = os.getenv("FAST2SMS_API_KEY")
+
+TICKET_EMAIL_ID = os.environ.get("TICKET_EMAIL_ID")
+TICKET_EMAIL_PASSWORD = os.environ.get("TICKET_EMAIL_PASSWORD")
