@@ -11,6 +11,7 @@ def verify_password(stored_password, provided_password):
     return check_password_hash(stored_password, provided_password)
 
 def send_otp_via_email(email, otp):
+    print(email, otp)
     """Sends OTP to emailID."""
     s = smtplib.SMTP('smtp.gmail.com', 587)
     s.starttls()
