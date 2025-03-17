@@ -1,50 +1,40 @@
-import cv2
-from transformers import pipeline
+from flask import Blueprint, jsonify
 import requests
-from deepface import DeepFace
-import whisper
-from moviepy import VideoFileClip
-from PIL import Image
-import os
-import tempfile
-import timm
-import ffmpeg
+import subprocess
 import torch
-import torchaudio
+import os
+import json
 import torchvision.transforms as transforms
+import cv2
+import tempfile
+from PIL import Image
+import timm
+from moviepy import VideoFileClip
+import assemblyai as aai
+from together import Together
 
-# Load Deepfake Detection Model
-# deepfake_detector = pipeline("image-classification", model="prithivMLmods/Deep-Fake-Detector-Model")
-# deepfake_model = timm.create_model("xception", pretrained=True, num_classes=2)
-# deepfake_model.eval()
-# whisper_model = whisper.load_model("base")
+aai.settings.api_key = "555614b07a4042b5bbd3f224ceae0b54"
+transcriber = aai.Transcriber()
 
-def extract_frames(video_path, frame_interval=10):
-    cap = cv2.VideoCapture(video_path)
-    frame_count = 0
-    extracted_frames = []
+# Create Flask Blueprint
+verification_bp = Blueprint('verification', __name__)
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+# Load Models
+deepfake_model = timm.create_model('xception', pretrained=True, num_classes=2)
+deepfake_model.eval()
+client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 
-        if frame_count % frame_interval == 0:
-            frame_path = f"frame_{frame_count}.jpg"
-            cv2.imwrite(frame_path, frame)
-            extracted_frames.append(frame_path)
+def download_from_s3(url, file_type="mp4"):
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type}")
+    response = requests.get(url, stream=True)
+    
+    with open(temp_file.name, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=1024):
+            f.write(chunk)
+    
+    return temp_file.name
 
-        frame_count += 1
-
-    cap.release()
-    return extracted_frames
-
-def detect_deepfake_in_video(video_url):
-    """Detect deepfake in a video by extracting frames and using a classification model."""
-    video_path = download_from_s3(video_url, "mp4")
-    if not video_path:
-        return False  # Fail gracefully if video cannot be downloaded
-
+def detect_deepfake(video_path):
     cap = cv2.VideoCapture(video_path)
     fake_frames = 0
     total_frames = 0
@@ -79,99 +69,73 @@ def detect_deepfake_in_video(video_url):
     cap.release()
     return fake_frames / total_frames > 0.5
 
-def authenticate_user(uploaded_image_path, existing_user_image_path, threshold=0.75):
-    try:
-        # Ensure both image files exist
-        if not os.path.exists(uploaded_image_path):
-            print(f"Error: Uploaded image not found: {uploaded_image_path}")
-            return False
-        if not os.path.exists(existing_user_image_path):
-            print(f"Error: Existing user image not found: {existing_user_image_path}")
-            return False
-
-        # Perform face verification
-        result = DeepFace.verify(
-            img1_path=uploaded_image_path,
-            img2_path=existing_user_image_path,
-            model_name='Facenet',
-            distance_metric="euclidean_l2"
-        )
-
-        distance = result.get("distance", 1)  # Default to high distance if result is invalid
-        return distance < threshold
-
-    except Exception as e:
-        print(f"DeepFace Authentication Error: {e}")
-        return False
-
-def download_from_s3(url, file_type="mp4"):
-    """Download a file from S3 and return the local file path."""
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type}")
-    response = requests.get(url, stream=True)
-
-    if response.status_code == 200:
-        with open(temp_file.name, "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                f.write(chunk)
-        return temp_file.name
-    else:
-        print(f"❌ Failed to download from S3: {url}")
-        return None
-
 def extract_audio(video_path, output_audio="output_audio.wav"):
-    """Extracts audio from a video file and saves it as a WAV file."""
+    clip = VideoFileClip(video_path)
+    clip.audio.write_audiofile(output_audio, codec='pcm_s16le', fps=16000)
+    return output_audio
+
+def convert_mp3_to_wav(mp3_path, wav_path):
+    command = f"ffmpeg -i {mp3_path} -ar 16000 -ac 1 {wav_path}"
+    subprocess.run(command, shell=True, check=True)
+
+def transcribe_audio(audio_url=None, video_url=None):
     try:
-        clip = VideoFileClip(video_path)
-        clip.audio.write_audiofile(output_audio, codec="pcm_s16le", fps=16000)
-        return output_audio
+        transcript=None
+        if audio_url:
+            transcript = transcriber.transcribe(audio_url)
+        elif video_url:
+            transcript = transcriber.transcribe(video_url)
+        else:
+            return jsonify({"error": "No valid audio source provided."}), 400
+
+        
+        print(f"Transcription Result: {transcript.text}")  # Debugging print
+
+        return transcript.text
+
     except Exception as e:
-        print(f"🚨 Error extracting audio: {e}")
-        return None
+        return jsonify({"error": f"Error during transcription: {str(e)}"}), 500
 
-# ✅ Convert .m4a to .wav
-def convert_m4a_to_wav(m4a_path, wav_path="converted_audio.wav"):
-    """Converts an .m4a audio file to .wav using FFmpeg."""
-    try:
-        print(f"🔄 Converting {m4a_path} to {wav_path} using FFmpeg...")
-        (
-            ffmpeg
-            .input(m4a_path)
-            .output(wav_path, format="wav", acodec="pcm_s16le", ar="16000")
-            .run(quiet=True, overwrite_output=True)
-        )
-        print(f"✅ Conversion successful: {wav_path}")
-        return wav_path
-    except Exception as e:
-        print(f"🚨 Error converting .m4a to .wav: {e}")
-        return None
+def classify_user_query(query):
+    # Define keywords for each category
+    loan_keywords = {
+        "Home Loan": ["home loan"],
+        "Car Loan": ["car loan"],
+        "Personal Loan": ["personal loan"],
+        "Business Loan": ["business loan"],
+        "Educational Loan": ["educational loan", "study loan", "student loan"]
+    }
 
-# ✅ Transcribe Audio
-def transcribe_audio(audio_url=None, video_path=None):
-    """Transcribes audio from either a direct audio file (.m4a) or extracted from a video."""
-    if audio_url:
-        audio_path = download_from_s3(audio_url, "m4a")
-        if not audio_path:
-            return "Error: Failed to download audio file."
-        audio_path = convert_m4a_to_wav(audio_path)  # Convert to WAV
-    elif video_path:
-        audio_path = extract_audio(video_path)
-        if not audio_path:
-            return "Error: Audio extraction failed."
-    else:
-        return "Error: No valid audio source provided."
+    policy_keywords = {
+        "Privacy Policy": ["privacy policy"],
+        "Grievance Redressal Policy": ["grievance redressal"],
+        "Terms and Conditions for Internet Banking": ["terms and conditions"],
+        "Anti-Money Laundering Policy": ["anti-money laundering"],
+        "Deposit Policy": ["deposit policy"],
+        "Compensation Policy": ["compensation policy"],
+        "Customer Rights Policy": ["customer rights policy"]
+    }
 
-    try:
-        print(f"🔍 Transcribing audio file: {audio_path}")
-        result = whisper_model.transcribe(audio_path)
-        return result["text"]
-    except Exception as e:
-        print(f"🚨 Whisper Transcription Error: {e}")
-        return "Error: Transcription failed."
+    query_lower = query.lower()  # Convert query to lowercase for case-insensitive matching
 
-def detect_query_type(file_url):
-    if file_url.endswith('.mp4'):
-        return "video"
-    elif file_url.endswith('.m4a'):
-        return "audio"
-    else:
-        return "unknown"
+    # Check for loan keywords
+    for loan_type, keywords in loan_keywords.items():
+        if any(keyword in query_lower for keyword in keywords):
+            return {
+                "category": "Loan",
+                "matched_name": loan_type
+            }
+
+    # Check for policy keywords
+    for policy_type, keywords in policy_keywords.items():
+        if any(keyword in query_lower for keyword in keywords):
+            return {
+                "category": "Policy",
+                "matched_name": policy_type
+            }
+
+    # Default to FAQ if no keywords match
+    return {
+        "category": "FAQ",
+        "matched_name": "FAQ"
+    }
