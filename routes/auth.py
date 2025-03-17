@@ -50,6 +50,7 @@ def login():
 def generate_otp():
     """Generates new OTP and sends its to the user's emailID."""
     data = request.json
+    print(data)
     if not ('email' in data):
         return jsonify({"error": "Missing required fields"}), 400
     
