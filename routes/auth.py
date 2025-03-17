@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models.user_model import find_user_by_mobile, find_user_by_email_id, create_user, update_otp, update_user
 from utils.auth_utils import hash_password, verify_password, send_otp_via_email
+from models.account_model import add_accounts
 import string, random
 
 auth_bp = Blueprint("auth", __name__)
@@ -83,3 +84,13 @@ def verify_otp():
 
     return jsonify({"verified": False, "message": "OTP does not match"}), 400
 
+@auth_bp.route('/add-accounts', methods=['POST'])
+def add_accounts_info():
+    data = request.json
+
+    if not "accounts" in data:
+        return jsonify({"error": "Missing required fields"}), 400
+    
+    add_accounts(data["accounts"])
+
+    return {"message": "Successful"}
