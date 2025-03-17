@@ -16,7 +16,8 @@ def send_otp_via_email(email, otp):
     s.starttls()
     s.login(TICKET_EMAIL_ID, TICKET_EMAIL_PASSWORD)
 
-    message = f'''OTP: {otp}'''
+    message = f'''\nOTP: {otp}'''
+    print(message)
     
     s.sendmail(TICKET_EMAIL_ID, email, message)
     s.quit()
