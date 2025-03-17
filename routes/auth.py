@@ -21,10 +21,11 @@ def signup():
 
     # Hash mpin before storing
     data["mpin"] = hash_password(data["mpin"])
+    create_user(data)
 
-    user = find_user_by_email_id(data["email"])
-    # Store user data
-    update_user(user, data)
+    # user = find_user_by_email_id(data["email"])
+    # # Store user data
+    # update_user(user, data)
     return jsonify({"message": "User registered successfully"}), 200
 
 @auth_bp.route('/login', methods=['POST'])
