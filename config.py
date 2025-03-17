@@ -17,6 +17,9 @@ MONGO_URI = os.getenv("MONGO_URI")
 mdb_client = MongoClient(MONGO_URI)
 db = mdb_client["database"]
 users_collection = db["users"]
+tickets_collection = db["tickets"]
+accounts_collection = db["accounts"]
+support_emp_collection = db["support_employees"]
 
 # AWS S3 Configuration
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
