@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models.user_model import find_user_by_mobile, find_user_by_email_id, create_user, update_otp
+from models.user_model import find_user_by_mobile, find_user_by_email_id, create_user, update_otp, update_user
 from utils.auth_utils import hash_password, verify_password, send_otp_via_email
 import string, random
 
@@ -10,8 +10,8 @@ def signup():
     """Registers a new user."""
     data = request.get_json()
 
-    # Required fields
-    required_fields = ["mobile","name", "address", "dob", "aadharUrl", "panUrl", "selfieUrl", "mpin", "fingerprint"]
+    # Required fields`  `
+    required_fields = ["email","mobile","name", "address", "dob", "aadharUrl", "panUrl", "selfieUrl", "mpin", "fingerprint"]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
@@ -22,8 +22,9 @@ def signup():
     # Hash mpin before storing
     data["mpin"] = hash_password(data["mpin"])
 
+    user = find_user_by_email_id(data["email"])
     # Store user data
-    create_user(data)
+    update_user(user, data)
     return jsonify({"message": "User registered successfully"}), 200
 
 @auth_bp.route('/login', methods=['POST'])
@@ -32,11 +33,14 @@ def login():
     data = request.get_json()
     mobile_no = data.get("mobile")
     mpin = data.get("mpin")
+    print(data)
 
     if not mobile_no or not mpin:
         return jsonify({"error": "Mobile number and mpin are required"}), 400
 
     user = find_user_by_mobile(mobile_no)
+    print(user)
+    print(verify_password(user["mpin"], mpin))
     if not user or not verify_password(user["mpin"], mpin):
         return jsonify({"error": "Invalid credentials"}), 401
 
@@ -50,19 +54,15 @@ def generate_otp():
         return jsonify({"error": "Missing required fields"}), 400
     
     email = data['email']
-
-    user = find_user_by_email_id(email)
-    if not user:
-        return jsonify({"error": "Email doesn't exist"}), 401
     
-    otp = int(''.join([random.choice(string.digits) for _ in range(6)]))
+    otp = int(''.join([random.choice(string.digits) for _ in range(4)]))
     
-    update_otp(user, otp)
+    create_user({"email":email, "otp":otp})
     send_otp_via_email(email, otp)
 
     return jsonify({"message": "OTP sent successfully"})
 
-@auth_bp.route('/generate-otp', methods=['POST'])
+@auth_bp.route('/verify-otp', methods=['POST'])
 def verify_otp():
     """Verifies OTP."""
     data = request.json

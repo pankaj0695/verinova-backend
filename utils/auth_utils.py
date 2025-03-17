@@ -1,5 +1,5 @@
 from werkzeug.security import generate_password_hash, check_password_hash
-import smtplib, os
+import smtplib
 from config import TICKET_EMAIL_ID, TICKET_EMAIL_PASSWORD
 
 def hash_password(password):
