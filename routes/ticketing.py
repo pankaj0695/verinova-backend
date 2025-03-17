@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 import json, smtplib
 from config import TICKET_EMAIL_ID, TICKET_EMAIL_PASSWORD
+from models.user_model import find_user_by_mobile
 from models.ticket_model import get_assigned_tickets_by_email, add_ticket_to_queue, get_all_tickets, update_ticket
 from models.account_model import get_account_by_aadhar
 from models.support_emp_model import add_employees, get_least_loaded_employee, get_all_employees
@@ -57,11 +58,13 @@ def add_ticket():
     '''
 
     data = request.json
-    required_fields = ["name","mobile","email", "category", "description", "aadhar_number"]
+    required_fields = ["name","mobile", "category", "description"]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
     
-    accountInfo = get_account_by_aadhar(data["aadhar_number"])
+    userInfo = find_user_by_mobile(data["mobile"])
+    accountInfo = get_account_by_aadhar(userInfo["aadhar_number"])
+    data['email'] = userInfo["email"]
     data['accountInfo'] = dict(accountInfo) if accountInfo else {}
     data['status'] = "Unresolved"
     data["assignedTo"] = get_least_loaded_employee()['email']
