@@ -4,7 +4,7 @@ from config import TICKET_EMAIL_ID, TICKET_EMAIL_PASSWORD
 from models.user_model import find_user_by_mobile
 from models.ticket_model import get_assigned_tickets_by_email, add_ticket_to_queue, get_all_tickets, update_ticket
 from models.account_model import get_account_by_aadhar
-from models.support_emp_model import add_employees, get_least_loaded_employee, get_all_employees
+from models.support_emp_model import add_employees, get_least_loaded_employee, get_all_employees , get_employee_by_email
 
 ticketing = Blueprint("ticketing", __name__)
 
@@ -14,6 +14,24 @@ with open("support.json", 'r') as f:
 queues = {}
 next_assignment = 0
 ticket_id = 0
+
+
+@ticketing.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    required_fields = ["email"]
+    
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    email = data["email"]
+
+    # Check if email exists in MongoDB
+    employee = get_employee_by_email(email)
+    if not employee:
+        return jsonify({"error": "Unauthorized: Email not found"}), 401
+
+    return jsonify({"message": "Login successful", "user": {"name": employee["name"], "email": employee["email"]}})
 
 # deprecated
 def send_mail_to_employee(employee, content):
@@ -96,7 +114,7 @@ def get_all_tickets_admin():
     print(tickets)
     return jsonify({"tickets": tickets})
 
-@ticketing.route('get-assigned-tickets', methods=['GET'])
+@ticketing.route('get-assigned-tickets', methods=['POST'])
 def get_assigned_tickets():
     data = request.json
     if not "email" in data:
